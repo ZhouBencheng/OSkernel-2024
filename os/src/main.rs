@@ -1,16 +1,45 @@
+//! The main module and entrypoint
+//!
+//! Various facilities of the kernels are implemented as submodules. The most
+//! important ones are:
+//!
+//! - [`trap`]: Handles all cases of switching from userspace to the kernel
+//! - [`syscall`]: System call handling and implementation
+//!
+//! The operating system also starts in this module. Kernel code starts
+//! executing from `entry.asm`, after which [`rust_main()`] is called to
+//! initialize various pieces of functionality. (See its source code for
+//! details.)
+//!
+//! We then call [`batch::run_next_app()`] and for the first time go to
+//! userspace.
+
+#![deny(missing_docs)]
+#![deny(warnings)]
 #![no_std]
 #![no_main]
 #![feature(panic_info_message)]
 
 use core::arch::global_asm;
-use crate::sbi::shutdown;
-global_asm!(include_str!("entry.asm"));
+
+extern crate log;
+extern crate riscv;
+extern crate lazy_static;
+extern crate sbi_rt;
 
 #[macro_use]
 mod console;
-mod sbi;
+pub mod batch;
 mod lang_items;
 mod logging;
+mod sbi;
+mod sync;
+pub mod syscall;
+pub mod trap;
+mod stack_trace;
+
+global_asm!(include_str!("entry.asm"));
+global_asm!(include_str!("link_app.S"));
 
 #[no_mangle]
 fn rust_main() -> ! {
@@ -49,7 +78,9 @@ fn rust_main() -> ! {
         "[kernel] boot_stack_top = {:#X} boot_stack_lower_bound = {:#X}",
         boot_stack_top as usize, boot_stack_lower_bound as usize
     );
-    shutdown(false);
+    trap::init();
+    batch::init();
+    batch::run_next_app();
 }
 
 fn clear_bss() { //bss段清零函数
