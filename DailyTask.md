@@ -20,3 +20,5 @@
 本地分支推送方法，已知当前我将gitlab仓库的链接命名为origin,github的链接名为github，因此想推送至gitlab时使用`git push origin main:main`即可，推送至github时则使用`git push github main:main`
 
 >  存疑：关于mtime寄存器和mtimecmp寄存器的使用，以及sstatus中各个字段的含义与操作，sie寄存器的作用原理依旧没理解
+
+## 2024.04.26

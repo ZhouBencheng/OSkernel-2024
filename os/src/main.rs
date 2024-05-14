@@ -29,7 +29,6 @@ extern crate sbi_rt;
 
 #[macro_use]
 mod console;
-pub mod batch;
 mod lang_items;
 mod logging;
 mod sbi;
@@ -37,6 +36,13 @@ mod sync;
 pub mod syscall;
 pub mod trap;
 mod stack_trace;
+mod timer;
+mod config;
+pub mod task;
+mod loader;
+
+#[path = "board/qemu.rs"]
+mod board;
 
 global_asm!(include_str!("entry.asm"));
 global_asm!(include_str!("link_app.S"));
@@ -79,8 +85,10 @@ fn rust_main() -> ! {
         boot_stack_top as usize, boot_stack_lower_bound as usize
     );
     trap::init();
-    batch::init();
-    batch::run_next_app();
+    loader::load_app();
+    trap::enable_timer_interrupt();
+    task::run_first_task();
+    panic!("Unreachable in rust_main!");
 }
 
 fn clear_bss() { //bss段清零函数

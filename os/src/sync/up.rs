@@ -20,8 +20,8 @@ impl<T> UPSafeCell<T> {
             inner: RefCell::new(value),
         }
     }
-    // 互斥获取<T> -> AppManager 不可变引用的方法
-    pub fn exclusice_access(&self) -> RefMut<'_, T> {
+    // 互斥地获取<T> -> AppManager 不可变引用的方法
+    pub fn exclusive_access(&self) -> RefMut<'_, T> {
         self.inner.borrow_mut()
     }
 }

@@ -8,10 +8,10 @@ mod lang_items;
 mod syscall;
 
 #[no_mangle]
-#[link_section = ".text.entry"] //定义用户库入口点
+#[link_section = ".text.entry"]
 pub extern "C" fn _start() -> ! {
     clear_bss();
-    exit(main()); //由于lib.rs中的main属于弱连接，所以此处首先调用bin库中的main函数
+    exit(main());
     panic!("unreachable after sys_exit!");
 }
 
@@ -38,4 +38,10 @@ pub fn write(fd: usize, buf: &[u8]) -> isize {
 }
 pub fn exit(exit_code: i32) -> isize {
     sys_exit(exit_code)
+}
+pub fn yield_() -> isize {
+    sys_yield()
+}
+pub fn get_time() -> isize {
+    sys_get_time()
 }
