@@ -24,4 +24,4 @@ easy-fs-fuse/target/*
 tools/
 pushall.sh
 *.bak
-DailyTasks.md
+/DailyTasks.md
