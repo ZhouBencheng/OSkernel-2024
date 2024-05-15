@@ -1,6 +1,8 @@
 #![no_std]
 #![no_main]
 
+use user_lib::{get_task_info, TaskInfo, MAX_SYSCALL_NUM, TaskStatus};
+
 #[macro_use]
 extern crate user_lib;
 
@@ -24,5 +26,14 @@ fn main() -> i32 {
     }
     println!("{}^{} = {}(MOD {})", p, iter, s[cur], m);
     println!("Test power_7 OK!");
+    let mut task_info = TaskInfo {
+        status: TaskStatus::UnInit,
+        call: [0; MAX_SYSCALL_NUM],
+        time: 0,
+    };
+    get_task_info(64, &mut task_info);
+    println!("TaskInfo02: status = {:?}, time = {}ms", task_info.status, task_info.time);
+    println!("TaskInfo02: syscall_write = {}", task_info.call[64]);
+    println!("TaskInfo02: syscall_exit = {}", task_info.call[93]);
     0
 }

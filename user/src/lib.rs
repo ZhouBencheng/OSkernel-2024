@@ -45,3 +45,30 @@ pub fn yield_() -> isize {
 pub fn get_time() -> isize {
     sys_get_time()
 }
+
+pub const MAX_SYSCALL_NUM: usize = 520;
+
+#[derive(Clone, Copy, Debug)]
+pub enum TaskStatus {
+    /// 未初始化
+    UnInit,
+    /// 就绪
+    Ready,
+    /// 运行
+    Running,
+    /// 退出
+    Exited,
+}
+
+#[derive(Clone, Copy)]
+#[allow(dead_code)]
+#[repr(C)]
+pub struct TaskInfo {
+    pub status: TaskStatus,
+    pub call: [usize; MAX_SYSCALL_NUM],
+    pub time: usize,
+}
+
+pub fn get_task_info(id: usize, ts: *mut TaskInfo) -> isize {
+    sys_task_info(id, ts as usize)
+}

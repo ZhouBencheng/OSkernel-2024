@@ -44,6 +44,7 @@ pub fn enable_timer_interrupt() {
 /// Trap处理入口
 #[no_mangle]
 pub fn trap_handler(cx: &mut TrapContext) -> &mut TrapContext {
+    crate::task::user_time_end();
     let scause = scause::read(); // 获取异常原因
     trace!("Begin to handle trap");
     let stval = stval::read();
@@ -72,5 +73,6 @@ pub fn trap_handler(cx: &mut TrapContext) -> &mut TrapContext {
             );
         }
     }
+    crate::task::user_time_start();
     cx
 }
