@@ -87,6 +87,7 @@ fn rust_main() -> ! {
     trap::init();
     loader::load_app();
     trap::enable_timer_interrupt();
+    trap::enable_fpu();
     task::run_first_task();
     panic!("Unreachable in rust_main!");
 }

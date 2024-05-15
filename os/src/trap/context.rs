@@ -18,6 +18,8 @@ pub struct TrapContext {
     pub sstatus: Sstatus,
     /// CSR sepc
     pub sepc: usize,
+    /// 浮点寄存器
+    pub f: [usize; 32],
 }
 
 impl TrapContext {
@@ -33,6 +35,7 @@ impl TrapContext {
             x: [0; 32],
             sstatus,
             sepc: entry, // 设置app执行入口
+            f: [0; 32],
         };
         cx.set_sp(sp); // 设置当前上下文用户栈指针
         cx
