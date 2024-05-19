@@ -1,18 +1,4 @@
-//! The main module and entrypoint
-//!
-//! Various facilities of the kernels are implemented as submodules. The most
-//! important ones are:
-//!
-//! - [`trap`]: Handles all cases of switching from userspace to the kernel
-//! - [`syscall`]: System call handling and implementation
-//!
-//! The operating system also starts in this module. Kernel code starts
-//! executing from `entry.asm`, after which [`rust_main()`] is called to
-//! initialize various pieces of functionality. (See its source code for
-//! details.)
-//!
-//! We then call [`batch::run_next_app()`] and for the first time go to
-//! userspace.
+//! rCore os入口main函数
 
 #![deny(missing_docs)]
 #![deny(warnings)]
@@ -87,7 +73,20 @@ fn rust_main() -> ! {
     trap::init();
     loader::load_app();
     trap::enable_timer_interrupt();
+    timer::set_next_trigger();
     trap::enable_fpu();
+    
+    // 开始检测内核态中断
+    use riscv::register::{sstatus, sie};
+    unsafe { sstatus::set_sie(); sie::set_stimer();}
+    loop {
+        if trap::check_kernel_interrupt() {
+            println!("kernel interrupt returned.");
+            break;
+        }
+    }
+    unsafe { sstatus::clear_sie(); sie::clear_stimer(); }
+
     task::run_first_task();
     panic!("Unreachable in rust_main!");
 }

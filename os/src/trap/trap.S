@@ -17,14 +17,17 @@
     .globl __restore
     .align 2
 __alltraps: # 保存上下文
-    bgtz sp, __user_trap_start
-    j __real_trap_enrty
+    # 后续实现地址空间后，可以使用判断sp正负的方式来判断是内核态还是用户态，以此避免提前丢失tp寄存器的值
+    csrr tp, sstatus
+    andi tp, tp, 0x100
+    beqz tp, __user_trap_start
+    j __real_trap_entry
 
 __user_trap_start:
     # 交换 sp->kernel stack, sscratch->user stack
     csrrw sp, sscratch, sp
 
-__real_trap_enrty:
+__real_trap_entry:
     # 在内核栈上分配一帧保存TrapContext
     # 更改栈帧大小，增加浮点寄存器保存空间
     addi sp, sp, -66*8

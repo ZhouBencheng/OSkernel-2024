@@ -16,6 +16,7 @@ use crate::syscall::syscall;
 use crate::timer::set_next_trigger;
 use crate::task::{exit_current_and_run_next, suspend_current_and_run_next};
 use core::arch::global_asm;
+use core::ptr::addr_of_mut;
 
 use log::trace;
 use riscv::register::{
@@ -53,21 +54,21 @@ pub fn enable_fpu() {
 
 /// 检查内核中断是否被触发
 pub fn check_kernel_interrupt() -> bool {
-    unsafe {KERNEL_INTERRUPT_TRIGGERED}
+    unsafe {(addr_of_mut!(KERNEL_INTERRUPT_TRIGGERED) as *mut bool).read_volatile()}
 }
 
 
 /// 标记内核中断已触发
 pub fn trigger_kernel_interrupt() {
-    unsafe {KERNEL_INTERRUPT_TRIGGERED = true;}
+    unsafe {(addr_of_mut!(KERNEL_INTERRUPT_TRIGGERED) as *mut bool).write_volatile(true);}
 }
 
 /// Trap处理入口
 #[no_mangle]
 pub fn trap_handler(cx: &mut TrapContext) -> &mut TrapContext {
     match sstatus::read().spp() {
-        sstatus::SPP::User => user_trap_handler(cx),
         sstatus::SPP::Supervisor => kernel_trap_handler(cx),
+        sstatus::SPP::User => user_trap_handler(cx),
     }
 }
 
