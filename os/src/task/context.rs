@@ -1,5 +1,7 @@
 //! 实现TaskContext数据结构
 
+use crate::trap::trap_return;
+
 /// 任务上下文
 #[derive(Clone, Copy)]
 #[repr(C)]
@@ -19,14 +21,11 @@ impl TaskContext {
         }
     }
     /// 设置app的运行初态
-    pub fn goto_restore(kernel_stack_ptr: usize) ->Self{
-        extern "C" {
-            fn __restore();
-        }
-        TaskContext {
-            ra: __restore as usize,
-            sp: kernel_stack_ptr,
+    pub fn goto_trap_return(kstack_ptr: usize) -> Self {
+        Self {
+            ra: trap_return as usize,
+            sp: kstack_ptr,
             s: [0; 12],
         }
-    } 
+    }
 }

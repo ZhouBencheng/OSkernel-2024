@@ -10,104 +10,65 @@
 //! 该函数基于scause寄存器中不同的异常，调用不同的处理函数
 
 mod context;
-pub use self::context::TrapContext;
 
+use crate::config::{TRAMPOLINE, TRAP_CONTEXT};
 use crate::syscall::syscall;
+use crate::task::{
+    current_trap_cx, current_user_token, exit_current_and_run_next, suspend_current_and_run_next,
+};
 use crate::timer::set_next_trigger;
-use crate::task::{exit_current_and_run_next, suspend_current_and_run_next};
-use core::arch::global_asm;
-use core::ptr::addr_of_mut;
-
-use log::trace;
+use core::arch::{asm, global_asm};
 use riscv::register::{
     mtvec::TrapMode,
     scause::{self, Exception, Interrupt, Trap},
-    stval, stvec, sie,
-    sstatus::{self, FS},
+    sie, stval, stvec,
 };
-
-static mut KERNEL_INTERRUPT_TRIGGERED: bool = false;
 
 global_asm!(include_str!("trap.S"));
 
-///将stvec寄存器的异常处理入口设置为`__alltraps`
+/// 初始化 CSR `stvec` 的入口地址为 `__alltraps`
 pub fn init() {
-    extern "C" {
-        fn __alltraps();
-    }
-    unsafe {stvec::write(__alltraps as usize, TrapMode::Direct);}
+    set_kernel_trap_entry();
 }
 
-/// 计时器模块使能
+/// 设置内核中断的处理函数
+fn set_kernel_trap_entry() {
+    unsafe {
+        stvec::write(trap_from_kernel as usize, TrapMode::Direct);
+    }
+}
+
+/// 设置用户中断的处理函数
+fn set_user_trap_entry() {
+    unsafe {
+        stvec::write(TRAMPOLINE as usize, TrapMode::Direct);
+    }
+}
+
+/// 使能时钟中断
 pub fn enable_timer_interrupt() {
     unsafe {
         sie::set_stimer();
     }
 }
 
-/// 使能浮点运算
-pub fn enable_fpu() {
-    unsafe {
-        sstatus::set_fs(FS::Initial);
-    }
-}
-
-/// 检查内核中断是否被触发
-pub fn check_kernel_interrupt() -> bool {
-    unsafe {(addr_of_mut!(KERNEL_INTERRUPT_TRIGGERED) as *mut bool).read_volatile()}
-}
-
-
-/// 标记内核中断已触发
-pub fn trigger_kernel_interrupt() {
-    unsafe {(addr_of_mut!(KERNEL_INTERRUPT_TRIGGERED) as *mut bool).write_volatile(true);}
-}
-
-/// Trap处理入口
 #[no_mangle]
-pub fn trap_handler(cx: &mut TrapContext) -> &mut TrapContext {
-    match sstatus::read().spp() {
-        sstatus::SPP::Supervisor => kernel_trap_handler(cx),
-        sstatus::SPP::User => user_trap_handler(cx),
-    }
-}
-
-/// Kernel Trap处理入口
-pub fn kernel_trap_handler(cx: &mut TrapContext) -> &mut TrapContext {
-    let scause = scause::read(); // 获取异常原因
-    let stval = stval::read();
-    match scause.cause() {
-        Trap::Interrupt(Interrupt::SupervisorTimer) => {
-            // 内核中断来自一个时钟中断
-            println!("kernel interrupt: from timer");
-            // 标记一下触发了中断
-            trigger_kernel_interrupt();
-            set_next_trigger();
-        }
-        Trap::Exception(Exception::StoreFault) | Trap::Exception(Exception::StorePageFault) => {
-            panic!("[kernel] PageFault in kernel, bad addr = {:#x}, bad instruction = {:#x}, kernel killed it.", stval, cx.sepc);
-        }
-        _ => {
-            // 其他的内核异常/中断
-            panic!("unknown kernel exception or interrupt");
-        }
-    }
-    cx
-}
-
-/// User Trap处理入口
-pub fn user_trap_handler(cx: &mut TrapContext) -> &mut TrapContext {
-    crate::task::user_time_end();
-    let scause = scause::read(); // 获取异常原因
-    trace!("Begin to handle trap");
+/// 处理中断、异常、系统调用
+pub fn trap_handler() -> ! {
+    set_kernel_trap_entry();
+    let cx = current_trap_cx();
+    let scause = scause::read();
     let stval = stval::read();
     match scause.cause() {
         Trap::Exception(Exception::UserEnvCall) => {
             cx.sepc += 4;
             cx.x[10] = syscall(cx.x[17], [cx.x[10], cx.x[11], cx.x[12]]) as usize;
         }
-        Trap::Exception(Exception::StoreFault) | Trap::Exception(Exception::StorePageFault) => {
-            println!("[kernel] PageFault in application, kernel killed it.");
+        Trap::Exception(Exception::StoreFault)
+        | Trap::Exception(Exception::StorePageFault)
+        | Trap::Exception(Exception::LoadFault)
+        | Trap::Exception(Exception::LoadPageFault) => {
+            println!("[kernel] PageFault in application, bad addr = {:#x}, bad instruction = {:#x}, kernel killed it.", stval, cx.sepc);
             exit_current_and_run_next();
         }
         Trap::Exception(Exception::IllegalInstruction) => {
@@ -126,6 +87,43 @@ pub fn user_trap_handler(cx: &mut TrapContext) -> &mut TrapContext {
             );
         }
     }
-    crate::task::user_time_start();
-    cx
+    trap_return();
 }
+
+#[no_mangle]
+/// 在 TRAMPOLINE 页中设置__restore函数的地址
+/// set the reg a0 = trap上下文指针, reg a1 = 用户页表物理地址
+/// 最后跳转至 __restore 返回用户态
+pub fn trap_return() -> ! {
+    set_user_trap_entry();
+    let trap_cx_ptr = TRAP_CONTEXT;
+    let user_satp = current_user_token();
+    extern "C" {
+        fn __alltraps();
+        fn __restore();
+    }
+    let restore_va = __restore as usize - __alltraps as usize + TRAMPOLINE;
+    unsafe {
+        // 执行__restore的目的
+        // 1. 切换到应用地址空间
+        // 2. 从Trap上下文恢复通用寄存器
+        // 3. sret继续执行应用
+        asm!(
+            "fence.i",
+            "jr {restore_va}",             // jump to new addr of __restore asm function
+            restore_va = in(reg) restore_va,
+            in("a0") trap_cx_ptr,      // a0 = virt addr of Trap Context
+            in("a1") user_satp,        // a1 = phy addr of usr page table
+            options(noreturn)
+        );
+    }
+}
+
+#[no_mangle]
+/// 未实现内核态处理异常、中断
+/// Todo: Chapter 9: I/O device
+pub fn trap_from_kernel() -> ! {
+    panic!("a trap from kernel!");
+}
+
+pub use self::context::TrapContext;

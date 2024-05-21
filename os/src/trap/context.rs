@@ -1,3 +1,5 @@
+//! 实现TrapContext数据结构
+
 use riscv::register::sstatus::{self, Sstatus, SPP};
 
 // repr(C)属性告诉编译器按照C语言的结构体布局来组织内存
@@ -18,8 +20,12 @@ pub struct TrapContext {
     pub sstatus: Sstatus,
     /// CSR sepc
     pub sepc: usize,
-    /// 浮点寄存器
-    pub f: [usize; 32],
+    /// 页表地址
+    pub kernel_satp: usize,
+    /// 内核栈地址
+    pub kernel_sp: usize,
+    /// trap处理函数地址
+    pub trap_handler: usize,
 }
 
 impl TrapContext {
@@ -28,14 +34,22 @@ impl TrapContext {
         self.x[2] = sp;
     }
     ///获取一个app执行环境的初始上下文（有所有权）
-    pub fn app_init_context(entry: usize, sp: usize) -> Self {
+    pub fn app_init_context(
+        entry: usize, 
+        sp: usize,
+        kernel_satp: usize,
+        kernel_sp: usize,
+        trap_handler: usize,
+    ) -> Self {
         let mut sstatus = sstatus::read();
         sstatus.set_spp(SPP::User); // 设置sstatus寄存器的SPP字段为User模式
         let mut cx = Self {
             x: [0; 32],
             sstatus,
             sepc: entry, // 设置app执行入口
-            f: [0; 32],
+            kernel_satp,  
+            kernel_sp,    
+            trap_handler,
         };
         cx.set_sp(sp); // 设置当前上下文用户栈指针
         cx

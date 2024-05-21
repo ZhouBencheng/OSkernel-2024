@@ -9,14 +9,13 @@ mod switch;
 #[allow(clippy::module_inception)]
 mod task;
 
-use crate::config::MAX_APP_NUM;
-use crate::loader::{get_app_num, init_app_cx};
+use crate::loader::{get_app_data, get_num_app};
 use crate::sbi::shutdown;
 use crate::sync::UPSafeCell;
-use crate::timer::get_time_ms;
 use lazy_static::*;
+use crate::trap::TrapContext;
 use self::switch::__switch;
-use crate::config::MAX_SYSCALL_NUM;
+use alloc::vec::Vec;
 
 pub use self::task::{TaskControlBlock, TaskStatus};
 pub use self::context::TaskContext;
@@ -31,46 +30,33 @@ pub struct TaskManager {
 
 /// 任务管理器内部
 pub struct TaskManagerInner {
+    /// TCB列表
+    tasks: Vec<TaskControlBlock>,
     /// 当前运行的任务id
     current_task: usize,
-    /// 停表
-    stop_watch: usize,
-    /// TCB列表
-    tasks: [TaskControlBlock; MAX_APP_NUM],
-}
-
-impl TaskManagerInner {
-    fn refresh_stop_watch(&mut self) -> usize {
-        let start_time = self.stop_watch;
-        self.stop_watch = get_time_ms();
-        self.stop_watch - start_time
-    }
 }
 
 lazy_static! {
     /// 全局变量：任务管理器
     pub static ref TASK_MANAGER: TaskManager = {
-        let num_app = get_app_num();
-        let mut tasks = [TaskControlBlock {
-            task_status: TaskStatus::UnInit,
-            task_cx: TaskContext::zero_init(),
-            kernel_time: 0,
-            user_time: 0,
-            syscall_info: [0; MAX_SYSCALL_NUM],
-        }; MAX_APP_NUM];
-        for (i, task) in tasks.iter_mut().enumerate() {
-            task.task_status = TaskStatus::Ready;
-            task.task_cx = TaskContext::goto_restore(init_app_cx(i));
+        println!("init TASK_MANAGER");
+        let num_app = get_num_app();
+        println!("num_app = {}", num_app);
+        let mut tasks: Vec<TaskControlBlock> = Vec::new();
+        for i in 0..num_app {
+            println!("Begin load TCB{}", i);
+            tasks.push(TaskControlBlock::new(get_app_data(i), i));
+            println!("End load TCB{}", i);
         }
+        println!("Successfully initialize the TrakControlBlock Vector.");
         TaskManager {
             num_app,
-            inner: unsafe{
+            inner: unsafe {
                 UPSafeCell::new(TaskManagerInner {
-                    current_task: 0,
-                    stop_watch: 0,
                     tasks,
+                    current_task: 0,
                 })
-            }, 
+            },
         }
     };
 }
@@ -82,9 +68,9 @@ impl TaskManager {
         let task0 = &mut inner.tasks[0];
         task0.task_status = TaskStatus::Running;
         let next_task_cx_ptr = &task0.task_cx as *const TaskContext;
-        inner.refresh_stop_watch();
         drop(inner);
         let mut _unused = TaskContext::zero_init();
+        println!("Begin to run the first app.");
         unsafe {
             __switch(&mut _unused as *mut TaskContext, next_task_cx_ptr);
         }
@@ -96,8 +82,6 @@ impl TaskManager {
         let mut inner = self.inner.exclusive_access();
         let current_task_id = inner.current_task;
         println!("task {} suspended", current_task_id);
-        // 统计内核时间
-        inner.tasks[current_task_id].kernel_time += inner.refresh_stop_watch();
         inner.tasks[current_task_id].task_status = TaskStatus::Ready;
     }
 
@@ -106,12 +90,6 @@ impl TaskManager {
         let mut inner = self.inner.exclusive_access();
         let current_task_id = inner.current_task;
         println!("task {} exited", current_task_id);
-        // 统计内核时间并输出
-        inner.tasks[current_task_id].kernel_time += inner.refresh_stop_watch();
-        println!("[task {} exited. user_time: {} ms, kernel_time: {} ms.", 
-                    current_task_id, inner.tasks[current_task_id].user_time, 
-                    inner.tasks[current_task_id].kernel_time
-                );
         inner.tasks[current_task_id].task_status = TaskStatus::Exited;
     }
 
@@ -124,6 +102,25 @@ impl TaskManager {
             .find(|id| inner.tasks[*id].task_status == TaskStatus::Ready)
     }
     
+    /// 获取当前正在运行的应用程序地址空间的token
+    fn get_current_token(&self) -> usize {
+        let inner = self.inner.exclusive_access();
+        inner.tasks[inner.current_task].get_user_token()
+    }
+
+    /// 获取当前正在运行的应用程序的TrapContext可变引用
+    fn get_current_trap_cx(&self) -> &'static mut TrapContext {
+        let inner = self.inner.exclusive_access();
+        inner.tasks[inner.current_task].get_trap_cx()
+    }
+
+    /// 改变当前正在运行应用程序的program break
+    pub fn change_current_program_brk(&self, size: i32) -> Option<usize> {
+        let mut inner = self.inner.exclusive_access();
+        let cur = inner.current_task;
+        inner.tasks[cur].change_program_brk(size)
+    }
+
     /// 运行下一个就绪态任务
     fn run_next_task(&self) {
         if let Some(next_task_id) = self.find_next_task() {
@@ -142,39 +139,6 @@ impl TaskManager {
             println!("All applications completed, shutdown!");
             shutdown(false);
         }
-    }
-
-    /// 统计内核时间，现在开始算用户时间
-    fn user_time_start(&self) {
-        let mut inner = self.inner.exclusive_access();
-        let current_task_id = inner.current_task;
-        inner.tasks[current_task_id].kernel_time += inner.refresh_stop_watch();
-    }
-
-    /// 统计用户时间，现在开始算内核时间
-    fn user_time_end(&self) {
-        let mut inner = self.inner.exclusive_access();
-        let current_task_id = inner.current_task;
-        inner.tasks[current_task_id].user_time += inner.refresh_stop_watch();
-    }
-
-    /// 更新系统调用次数
-    fn update_syscall_info(&self, syscall_id: usize) {
-        let mut inner = self.inner.exclusive_access();
-        let current_task_id = inner.current_task;
-        inner.tasks[current_task_id].syscall_info[syscall_id] += 1;
-    }
-
-    /// 获取系统调用次数
-    fn get_syscall_info(&self) -> [usize; MAX_SYSCALL_NUM] {
-        let inner = self.inner.exclusive_access();
-        inner.tasks[inner.current_task].syscall_info
-    }
-
-    /// 获取当前任务运行时间(内核时间+用户时间)
-    fn get_total_time(&self) -> usize {
-        let inner = self.inner.exclusive_access();
-        inner.tasks[inner.current_task].kernel_time + inner.tasks[inner.current_task].user_time
     }
 }
 
@@ -209,28 +173,17 @@ pub fn exit_current_and_run_next() {
     mark_current_exited();
     run_next_task();
 }
-
-/// 统计内核时间，现在开始算用户时间
-pub fn user_time_start() {
-    TASK_MANAGER.user_time_start();
+/// 获取当前正在运行的应用程序地址空间的token
+pub fn current_user_token() -> usize {
+    TASK_MANAGER.get_current_token()
 }
 
-/// 统计用户时间，现在开始算内核时间
-pub fn user_time_end() {
-    TASK_MANAGER.user_time_end();
+/// 获取当前正在运行的应用程序的TrapContext可变引用
+pub fn current_trap_cx() -> &'static mut TrapContext {
+    TASK_MANAGER.get_current_trap_cx()
 }
 
-/// 获取系统调用次数
-pub fn get_syscall_info() -> [usize; MAX_SYSCALL_NUM] {
-    TASK_MANAGER.get_syscall_info()
-}
-
-/// 更新系统调用次数
-pub fn update_syscall_info(syscall_id: usize) {
-    TASK_MANAGER.update_syscall_info(syscall_id);
-}
-
-/// 获取当前任务运行时间(内核时间+用户时间)
-pub fn get_total_time() -> usize {
-    TASK_MANAGER.get_total_time()
+/// 改变当前正在运行应用程序的program break
+pub fn change_program_brk(size: i32) -> Option<usize> {
+    TASK_MANAGER.change_current_program_brk(size)
 }
