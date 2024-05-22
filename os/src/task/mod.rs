@@ -95,6 +95,7 @@ impl TaskManager {
     fn mark_current_suspended(&self) {
         let mut inner = self.inner.exclusive_access();
         let current_task_id = inner.current_task;
+        // println!("Task {} suspended.", current_task_id);
         // 统计内核时间
         inner.tasks[current_task_id].kernel_time += inner.refresh_stop_watch();
         inner.tasks[current_task_id].task_status = TaskStatus::Ready;
@@ -104,6 +105,7 @@ impl TaskManager {
     fn mark_current_exited(&self) {
         let mut inner = self.inner.exclusive_access();
         let current_task_id = inner.current_task;
+        // println!("Task {} exited.", current_task_id);
         // 统计内核时间并输出
         inner.tasks[current_task_id].kernel_time += inner.refresh_stop_watch();
         println!("[task {} exited. user_time: {} ms, kernel_time: {} ms.", 
@@ -127,6 +129,7 @@ impl TaskManager {
         if let Some(next_task_id) = self.find_next_task() {
             let mut inner = self.inner.exclusive_access();
             let current = inner.current_task;
+            // println!("task {} start", current);
             inner.tasks[next_task_id].task_status = TaskStatus::Running;
             inner.current_task = next_task_id;
             let current_task_cx_ptr = &mut inner.tasks[current].task_cx as *mut TaskContext;

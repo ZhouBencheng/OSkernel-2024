@@ -16,7 +16,7 @@ pub fn get_time_ms() -> usize {
     time::read() / (CLOCK_FREQ / MSEC_PER_SEC)
 }
 
-const TICKS_PER_SEC: usize = 100;
+const TICKS_PER_SEC: usize = 10;
 
 /// 设置下一次始终中断触发时间，即mtimecmp寄存器的值
 pub fn set_next_trigger() {
