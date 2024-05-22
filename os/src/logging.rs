@@ -27,10 +27,11 @@ impl Log for SimpleLogger {
     fn flush(&self) {}
 }
 
+/// 日志系统初始化函数
 pub fn init() {
     static LOGGER: SimpleLogger = SimpleLogger;
     log::set_logger(&LOGGER).unwrap();
-    log::set_max_level(match option_env!("LOG") {
+    log::set_max_level(match option_env!("LOG") { // 获取LOG环境变量的值，设置日志输出等级
         Some("TRACE") => LevelFilter::Trace,
         Some("INFO") => LevelFilter::Info,
         Some("WARN") => LevelFilter::Warn,

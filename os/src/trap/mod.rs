@@ -40,15 +40,15 @@ pub fn trap_handler(cx: &mut TrapContext) -> &mut TrapContext {
     trace!("Begin to handle trap");
     let stval = stval::read();
     match scause.cause() {
-        Trap::Exception(Exception::UserEnvCall) => {
+        Trap::Exception(Exception::UserEnvCall) => { // 处理系统调用
             cx.sepc += 4;
             cx.x[10] = syscall(cx.x[17], [cx.x[10], cx.x[11], cx.x[12]]) as usize;
         }
-        Trap::Exception(Exception::StoreFault) | Trap::Exception(Exception::StorePageFault) => {
+        Trap::Exception(Exception::StoreFault) | Trap::Exception(Exception::StorePageFault) => { // 处理写错误
             println!("[kernel] PageFault in application, kernel killed it.");
             run_next_app();
         }
-        Trap::Exception(Exception::IllegalInstruction) => {
+        Trap::Exception(Exception::IllegalInstruction) => { // 处理非法指令
             println!("[kernel] IllegalInstruction in application, kernel killed it.");
             run_next_app();
         }
@@ -60,5 +60,5 @@ pub fn trap_handler(cx: &mut TrapContext) -> &mut TrapContext {
             );
         }
     }
-    cx
+    cx // 将trap上下文返回，以供之后__restore函数将上下文内容恢复到寄存器中
 }

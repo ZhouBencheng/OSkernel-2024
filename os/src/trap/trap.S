@@ -1,8 +1,8 @@
 .altmacro
-.macro SAVE_GP n
+.macro SAVE_GP n # 保存通用寄存器的宏函数
     sd x\n, \n*8(sp)
 .endm
-.macro LOAD_GP n
+.macro LOAD_GP n # 加载通用寄存器的宏函数
     ld x\n, \n*8(sp)
 .endm
     .section .text

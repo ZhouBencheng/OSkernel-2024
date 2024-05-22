@@ -1,3 +1,5 @@
+//! 输出 Hello, world! 到控制台
+
 #![no_std]
 #![no_main]
 

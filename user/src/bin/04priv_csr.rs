@@ -1,3 +1,5 @@
+//! 在U模式访问特权CSR sstatus
+
 #![no_std]
 #![no_main]
 

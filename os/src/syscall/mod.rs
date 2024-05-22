@@ -19,7 +19,9 @@ use self::process::*;
 /// 处理通用的所有系统调用，这里是所有系统调用的最高抽象入口
 pub fn syscall(syscall_id: usize, args: [usize; 3]) -> isize {
     match syscall_id {
+        // 处理写文件相关系统调用
         SYSCALL_WRITE => sys_write(args[0], args[1] as *const u8, args[2]),
+        // 处理退出系统调用
         SYSCALL_EXIT => sys_exit(args[0] as i32),
         _ => panic!("Unsupported syscall_id: {}", syscall_id),
     }

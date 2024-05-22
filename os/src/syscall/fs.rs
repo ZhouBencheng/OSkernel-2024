@@ -2,7 +2,7 @@
 
 const FD_STDOUT: usize = 1;
 
-// fd（file depictor）文件标识符, 在缓冲区buf起始地址开始写入len个字节
+/// fd（file depictor）文件标识符, 在缓冲区buf起始地址开始写入len个字节
 pub fn sys_write(fd: usize, buf: *const u8, len: usize) -> isize {
     match fd {
         FD_STDOUT => {
