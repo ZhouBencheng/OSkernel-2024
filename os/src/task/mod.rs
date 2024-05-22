@@ -81,7 +81,7 @@ impl TaskManager {
     fn mark_current_suspended(&self) {
         let mut inner = self.inner.exclusive_access();
         let current_task_id = inner.current_task;
-        println!("task {} suspended", current_task_id);
+        // println!("task {} suspended", current_task_id);
         inner.tasks[current_task_id].task_status = TaskStatus::Ready;
     }
 
@@ -89,7 +89,7 @@ impl TaskManager {
     fn mark_current_exited(&self) {
         let mut inner = self.inner.exclusive_access();
         let current_task_id = inner.current_task;
-        println!("task {} exited", current_task_id);
+        // println!("task {} exited", current_task_id);
         inner.tasks[current_task_id].task_status = TaskStatus::Exited;
     }
 
@@ -126,7 +126,7 @@ impl TaskManager {
         if let Some(next_task_id) = self.find_next_task() {
             let mut inner = self.inner.exclusive_access();
             let current = inner.current_task;
-            println!("task {} start", current);
+            // println!("task {} start", current);
             inner.tasks[next_task_id].task_status = TaskStatus::Running;
             inner.current_task = next_task_id;
             let current_task_cx_ptr = &mut inner.tasks[current].task_cx as *mut TaskContext;
