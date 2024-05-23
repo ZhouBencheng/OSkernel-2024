@@ -9,17 +9,20 @@ use crate::task::{get_syscall_info, get_total_time};
 
 use super::{SYSCALL_EXIT, SYSCALL_GET_TIME, SYSCALL_WRITE, SYSCALL_YIELD, SYSCALL_TASK_INFO};
 
+/// 退出当前应用
 pub fn sys_exit(exit_id: i32) -> ! {
     println!("[kernel] App exited with code {}", exit_id);
     exit_current_and_run_next();
     panic!("Unreachable in sys_exit!");
 }
 
+/// 主动让权上系统调用
 pub fn sys_yield() -> isize {
     suspend_current_and_run_next();
     0
 }
 
+/// 获取当前时间
 pub fn sys_get_time() -> isize {
     get_time_ms() as isize
 }

@@ -1,14 +1,18 @@
 .attribute arch, "rv64gc"
 .altmacro
+# 保存通用寄存器的宏函数
 .macro SAVE_GP n
     sd x\n, \n*8(sp)
 .endm
+# 加载通用寄存器的宏函数
 .macro LOAD_GP n
     ld x\n, \n*8(sp)
 .endm
+# 保存浮点寄存器的宏函数
 .macro SAVE_FP n
     fsd f\n, ((\n+34)*8)(sp)
 .endm
+# 加载浮点寄存器的宏函数
 .macro LOAD_FP n
     fld f\n, ((\n+34)*8)(sp)
 .endm
@@ -17,14 +21,16 @@
     .globl __restore
     .align 2
 __alltraps: # 保存上下文
-    bgtz sp, __user_trap_start
-    j __real_trap_enrty
+    csrr tp, sstatus            # 读取sstatus到tp中
+    andi tp, tp, 0x100          # 取出SPP位
+    beqz tp, __user_trap_start  # 如果SPP=0，说明是用户态异常
+    j __real_trap_entry         # 否则是内核态异常
 
 __user_trap_start:
     # 交换 sp->kernel stack, sscratch->user stack
     csrrw sp, sscratch, sp
 
-__real_trap_enrty:
+__real_trap_entry:
     # 在内核栈上分配一帧保存TrapContext
     # 更改栈帧大小，增加浮点寄存器保存空间
     addi sp, sp, -66*8

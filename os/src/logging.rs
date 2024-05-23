@@ -17,7 +17,7 @@ impl Log for SimpleLogger {
             Level::Debug => 32, // Green
             Level::Trace => 90, // BrightBlack
         };
-        println!(
+        println!( // 根据日志等级打印不同颜色的日志
             "\u{1B}[{}m[{:>5}] {}\u{1B}[0m",
             color,
             record.level(),
@@ -27,10 +27,11 @@ impl Log for SimpleLogger {
     fn flush(&self) {}
 }
 
+/// 日志系统初始化函数
 pub fn init() {
     static LOGGER: SimpleLogger = SimpleLogger;
     log::set_logger(&LOGGER).unwrap();
-    log::set_max_level(match option_env!("LOG") {
+    log::set_max_level(match option_env!("LOG") { // 获取环境变量中LOG的值
         Some("TRACE") => LevelFilter::Trace,
         Some("INFO") => LevelFilter::Info,
         Some("WARN") => LevelFilter::Warn,

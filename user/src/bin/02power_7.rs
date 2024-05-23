@@ -1,3 +1,5 @@
+//! 快速幂运算测试
+
 #![no_std]
 #![no_main]
 
@@ -32,6 +34,10 @@ fn main() -> i32 {
         time: 0,
     };
     get_task_info(64, &mut task_info);
+    let mut f: f64 = 0.1;
+    println!("Float number f = {}", f);
+    f += 0.1;
+    println!("Float number f = {}", f);
     println!("TaskInfo02: status = {:?}, time = {}ms", task_info.status, task_info.time);
     println!("TaskInfo02: syscall_write = {}", task_info.call[64]);
     println!("TaskInfo02: syscall_exit = {}", task_info.call[93]);
